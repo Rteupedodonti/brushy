@@ -5,14 +5,14 @@ import os
 from dotenv import load_dotenv
 
 # Veritabanı nesnesini models.py'den import ediyoruz.
-# Bu, tüm modellerin tek ve doğru SQLAlchemy nesnesine bağlı olmasını sağlar.
 from models import db
 
 # Veritabanı başlangıcı için Parent modelini içe aktarın (create_all için gerekli)
 from models import Parent
 
-# Bu komut, uygulamanın çalışacağı ana fonksiyondur. Gunicorn bunu çağırır.
-def create_app(test_config=None):
+# --- ÖNEMLİ DEĞİŞİKLİK: **kwargs Eklendi ---
+# Bu, Render'ın (uWSGI'nin) gönderdiği fazladan gizli argümanları kabul etmesini sağlar.
+def create_app(test_config=None, **kwargs):
     # Ortam değişkenlerini (.env dosyasından) yükle
     load_dotenv()
 
@@ -57,7 +57,7 @@ def create_app(test_config=None):
     def health():
         return jsonify({'status': 'healthy', 'timestamp': datetime.utcnow().isoformat()})
 
-    # Veritabanı tablolarını oluşturma ve başlangıç verilerini ekleme (SADECE Gunicorn başlatıldığında çalışır)
+    # Veritabanı tablolarını oluşturma ve başlangıç verilerini ekleme (SADECE uWSGI başlatıldığında çalışır)
     with app.app_context():
         # Veritabanında tabloları oluştur (Render'da ilk çalıştırmada tabloları oluşturur)
         db.create_all()
@@ -80,5 +80,3 @@ def create_app(test_config=None):
             print("Veritabanı zaten başlatılmış (Parent mevcut).")
              
     return app
-
-# KALDİRİLDİ: if __name__ == '__main__': bloku. Bu, Flask geliştirme sunucusunun çalışmasını engeller.
