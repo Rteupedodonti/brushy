@@ -6,10 +6,10 @@ from dotenv import load_dotenv
 
 # Veritabanı nesnesini models.py'den import ediyoruz.
 # Bu, tüm modellerin tek ve doğru SQLAlchemy nesnesine bağlı olmasını sağlar.
-from models import db 
+from models import db
 
 # Veritabanı başlangıcı için Parent modelini içe aktarın (create_all için gerekli)
-from models import Parent 
+from models import Parent
 
 # Bu komut, uygulamanın çalışacağı ana fonksiyondur. Gunicorn bunu çağırır.
 def create_app(test_config=None):
@@ -18,7 +18,7 @@ def create_app(test_config=None):
 
     # Flask uygulamasını başlat
     app = Flask(__name__)
-        
+    
     # --- KONFİGÜRASYON ---
     # os.environ.get() ile .env dosyasından çekiliyor (Render'daki Environment Variables kullanılır).
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default-dev-secret-key')
@@ -43,7 +43,7 @@ def create_app(test_config=None):
         app.register_blueprint(api_bp, url_prefix='/api')
     except ImportError:
         print("UYARI: 'routes.py' bulunamadı. Lütfen API rotalarının doğru dosyada (routes.py veya api.py) olduğundan emin olun.")
-        
+    
     # --- TEMEL ROTLAR ---
     @app.route('/')
     def index():
@@ -78,7 +78,7 @@ def create_app(test_config=None):
                 print(f"Hata oluştu: {e}")
         else:
             print("Veritabanı zaten başlatılmış (Parent mevcut).")
-                    
+             
     return app
 
 # KALDİRİLDİ: if __name__ == '__main__': bloku. Bu, Flask geliştirme sunucusunun çalışmasını engeller.
