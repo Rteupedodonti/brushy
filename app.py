@@ -11,7 +11,7 @@ from models import db
 from models import Parent
 
 # --- ÖNEMLİ DEĞİŞİKLİK: **kwargs Eklendi ---
-# Bu, Render'ın (uWSGI'nin) gönderdiği fazladan gizli argümanları kabul etmesini sağlar.
+# Bu, Render'ın (uWSGI/Gunicorn'un) gönderdiği fazladan gizli argümanları kabul etmesini sağlar.
 def create_app(test_config=None, **kwargs):
     # Ortam değişkenlerini (.env dosyasından) yükle
     load_dotenv()
@@ -80,3 +80,7 @@ def create_app(test_config=None, **kwargs):
             print("Veritabanı zaten başlatılmış (Parent mevcut).")
              
     return app
+
+# WSGI sunucusunun (Gunicorn/uWSGI) aradığı "application" objesini oluşturur.
+# Bu, create_app() çağrıldığından emin olmanın en kesin yoludur.
+application = create_app()
