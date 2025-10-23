@@ -1,1 +1,1 @@
-web: uwsgi --http :$PORT --module app:create_app
+web: gunicorn app:application
