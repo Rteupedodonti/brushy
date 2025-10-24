@@ -1,17 +1,17 @@
+# Kütüphane İçe Aktarımları
 from flask import Flask, jsonify
 from flask_cors import CORS
 from datetime import datetime
 import os
 from dotenv import load_dotenv
 
-# Veritabanı nesnesini models.py'den import ediyoruz.
-from models import db
+# Veritabanı model ve nesneleri
+from models import db, Parent 
 
-# Veritabanı başlangıcı için Parent modelini içe aktarın (create_all için gerekli)
-from models import Parent
-
-# --- ÖNEMLİ DEĞİŞİKLİK: **kwargs Eklendi ---
-# Bu, Render'ın (uWSGI/Gunicorn'un) gönderdiği fazladan gizli argümanları kabul etmesini sağlar.
+# --- create_app FONKSİYONU ---
+# Bu, Flask uygulama örneğini oluşturan ve yapılandıran ana fonksiyondur.
+# **kwargs argümanı, Render gibi dağıtım ortamlarının gönderdiği fazladan argümanları
+# sorunsuz bir şekilde kabul etmesini sağlar.
 def create_app(test_config=None, **kwargs):
     # Ortam değişkenlerini (.env dosyasından) yükle
     load_dotenv()
@@ -20,11 +20,14 @@ def create_app(test_config=None, **kwargs):
     app = Flask(__name__)
     
     # --- KONFİGÜRASYON ---
-    # os.environ.get() ile .env dosyasından çekiliyor (Render'daki Environment Variables kullanılır).
+    # Ortam değişkenlerini os.environ.get() ile çekiyoruz.
+    # DATABASE_URL, Render veya Neon/Supabase bağlantısı için zorunludur.
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default-dev-secret-key')
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('SQLALCHEMY_URL', os.environ.get('DATABASE_URL'))
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+    
     if app.config['SQLALCHEMY_DATABASE_URI'] is None:
-        # Eğer DATABASE_URL Render'da ayarlanmamışsa, yerel SQLite'a döner (Geliştirme için)
+        # Eğer DATABASE_URL ayarlanmamışsa, yerel SQLite'a döner (Yerel Geliştirme için)
+        print("UYARI: DATABASE_URL ayarlanmadı, yerel SQLite veritabanı kullanılıyor.")
         app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///default_db.db'
         
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -34,17 +37,18 @@ def create_app(test_config=None, **kwargs):
 
     # Uygulama genişletmelerini başlat
     db.init_app(app)
-    # CORS ayarları (Tüm kaynaklardan gelen isteklere izin verir)
+    # CORS ayarları
     CORS(app)
 
     # Blueprint'i Import Et ve Kaydet
     try:
-        from routes import api_bp
+        # api.py dosyasını kullanıyoruz (routes.py yerine)
+        from api import api_bp
         app.register_blueprint(api_bp, url_prefix='/api')
     except ImportError:
-        print("UYARI: 'routes.py' bulunamadı. Lütfen API rotalarının doğru dosyada (routes.py veya api.py) olduğundan emin olun.")
+        print("KRİTİK HATA: 'api.py' veya içindeki 'api_bp' bulunamadı. Lütfen kontrol edin.")
     
-    # --- TEMEL ROTLAR ---
+    # --- TEMEL ROTLAR (Sağlık Kontrolü) ---
     @app.route('/')
     def index():
         return jsonify({
@@ -57,30 +61,45 @@ def create_app(test_config=None, **kwargs):
     def health():
         return jsonify({'status': 'healthy', 'timestamp': datetime.utcnow().isoformat()})
 
-    # Veritabanı tablolarını oluşturma ve başlangıç verilerini ekleme (SADECE uWSGI başlatıldığında çalışır)
+    # Veritabanı başlatma ve tabloları oluşturma
+    # Bu blok sadece uygulama başlatıldığında bir kez çalışır.
     with app.app_context():
-        # Veritabanında tabloları oluştur (Render'da ilk çalıştırmada tabloları oluşturur)
+        # Tabloları oluştur
         db.create_all()
 
-        # Eğer hiç Parent yoksa, örnek bir ebeveyn oluştur
+        # Varsayılan kullanıcıyı kontrol et ve ekle
         if not Parent.query.first():
-            print("Veritabanı başlatılıyor...")
+            print("Veritabanı başlatılıyor... Varsayılan Kullanıcı oluşturuluyor.")
             try:
+                # Varsayılan kullanıcıyı hashlenmiş bir şifre ile ekleyelim (Güvenlik)
+                from utils import hash_password 
+                
+                # Bu kullanıcı giriş yapma hatasını test ettiğiniz kullanıcıydı.
+                hashed_password = hash_password("cokgizlisifre123") 
+                
                 parent = Parent(
-                    name="Veli Kullanıcı",
-                    email="veli@example.com"
+                    name="Gamze Test Kullanıcısı",
+                    email="gamze@example.com",
+                    password_hash=hashed_password
                 )
                 db.session.add(parent)
                 db.session.commit()
-                print("Varsayılan Veli Kullanıcı oluşturuldu.")
+                print("Varsayılan Veli Kullanıcı (gamze@example.com) başarıyla oluşturuldu.")
             except Exception as e:
                 db.session.rollback()
-                print(f"Hata oluştu: {e}")
+                print(f"Veritabanı başlangıç hatası: {e}")
         else:
             print("Veritabanı zaten başlatılmış (Parent mevcut).")
-             
+            
     return app
 
-# WSGI sunucusunun (Gunicorn/uWSGI) aradığı "application" objesini oluşturur.
-# Bu, create_app() çağrıldığından emin olmanın en kesin yoludur.
-application = create_app()
+# WSGI SUNUCUSU GİRİŞ NOKTASI
+# Bu, uWSGI/Gunicorn sunucularının uygulamayı başlatmak için aradığı yerdir.
+# Flask'ta yaygın uygulama ismi "app" veya "application"dır.
+# Biz, Render'daki başlangıç komutumuz olan 'uwsgi --module app:app' ile uyumlu olması için
+# 'app' değişkenini kullanıyoruz.
+app = create_app()
+
+if __name__ == '__main__':
+    # Yerel geliştirme için (python app.py çalıştırıldığında)
+    app.run(debug=True, host='0.0.0.0')
