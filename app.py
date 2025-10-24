@@ -6,12 +6,10 @@ import os
 from dotenv import load_dotenv
 
 # Veritabanı model ve nesneleri
+# NOT: models.py içinde db, Parent olmalı.
 from models import db, Parent 
 
 # --- create_app FONKSİYONU ---
-# Bu, Flask uygulama örneğini oluşturan ve yapılandıran ana fonksiyondur.
-# **kwargs argümanı, Render gibi dağıtım ortamlarının gönderdiği fazladan argümanları
-# sorunsuz bir şekilde kabul etmesini sağlar.
 def create_app(test_config=None, **kwargs):
     # Ortam değişkenlerini (.env dosyasından) yükle
     load_dotenv()
@@ -20,8 +18,6 @@ def create_app(test_config=None, **kwargs):
     app = Flask(__name__)
     
     # --- KONFİGÜRASYON ---
-    # Ortam değişkenlerini os.environ.get() ile çekiyoruz.
-    # DATABASE_URL, Render veya Neon/Supabase bağlantısı için zorunludur.
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default-dev-secret-key')
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
     
@@ -40,13 +36,15 @@ def create_app(test_config=None, **kwargs):
     # CORS ayarları
     CORS(app)
 
-    # Blueprint'i Import Et ve Kaydet
+    # Blueprint'i Import Et ve Kaydet (API rotalarını yükleyen kısım DÜZELTİLDİ)
+    # Dosya listesine göre 'routes.py' kullanılıyor olmalı.
     try:
-        # api.py dosyasını kullanıyoruz (routes.py yerine)
-        from api import api_bp
+        # routes.py dosyasından 'api_bp' objesini içe aktar
+        from routes import api_bp
         app.register_blueprint(api_bp, url_prefix='/api')
-    except ImportError:
-        print("KRİTİK HATA: 'api.py' veya içindeki 'api_bp' bulunamadı. Lütfen kontrol edin.")
+        print("API Blueprint (routes.py) başarıyla yüklendi.")
+    except ImportError as e:
+        print(f"KRİTİK HATA: Rota (Blueprint) yüklenemedi. routes.py dosyasında 'api_bp' objesi yok veya başka bir ithalat hatası var. Hata: {e}")
     
     # --- TEMEL ROTLAR (Sağlık Kontrolü) ---
     @app.route('/')
@@ -71,7 +69,7 @@ def create_app(test_config=None, **kwargs):
         if not Parent.query.first():
             print("Veritabanı başlatılıyor... Varsayılan Kullanıcı oluşturuluyor.")
             try:
-                # Varsayılan kullanıcıyı hashlenmiş bir şifre ile ekleyelim (Güvenlik)
+                # utils.py dosyasında hash_password fonksiyonu olmalı
                 from utils import hash_password 
                 
                 # Bu kullanıcı giriş yapma hatasını test ettiğiniz kullanıcıydı.
@@ -85,6 +83,15 @@ def create_app(test_config=None, **kwargs):
                 db.session.add(parent)
                 db.session.commit()
                 print("Varsayılan Veli Kullanıcı (gamze@example.com) başarıyla oluşturuldu.")
+            except ImportError:
+                 print("UYARI: utils.py dosyasında hash_password fonksiyonu bulunamadı. Kullanıcı şifresiz kaydedildi.")
+                 # utils.py bulunamazsa şifresiz kaydet
+                 parent = Parent(
+                    name="Gamze Test Kullanıcısı",
+                    email="gamze@example.com",
+                 )
+                 db.session.add(parent)
+                 db.session.commit()
             except Exception as e:
                 db.session.rollback()
                 print(f"Veritabanı başlangıç hatası: {e}")
@@ -94,10 +101,7 @@ def create_app(test_config=None, **kwargs):
     return app
 
 # WSGI SUNUCUSU GİRİŞ NOKTASI
-# Bu, uWSGI/Gunicorn sunucularının uygulamayı başlatmak için aradığı yerdir.
-# Flask'ta yaygın uygulama ismi "app" veya "application"dır.
-# Biz, Render'daki başlangıç komutumuz olan 'uwsgi --module app:app' ile uyumlu olması için
-# 'app' değişkenini kullanıyoruz.
+# 'uwsgi --module app:app' komutunun aradığı 'app' objesi oluşturulur.
 app = create_app()
 
 if __name__ == '__main__':
